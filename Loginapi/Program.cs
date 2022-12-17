@@ -13,9 +13,9 @@ var app = builder.Build();
 
 app.UseCors(options => options.WithOrigins(new[] { "http://localhost:8000", "http://localhost:4200" }).AllowAnyHeader().AllowAnyMethod().AllowCredentials());
 // Configure the HTTP request pipeline.
-
+app.UseSwagger();
+app.UseSwaggerUI();
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
