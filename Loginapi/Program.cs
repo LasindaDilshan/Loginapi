@@ -1,10 +1,13 @@
 using Loginapi.Data;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
+var services = builder.Services;
+services.AddEndpointsApiExplorer();
+services.AddSwaggerGen();
 builder.Services.AddControllers();
 
 builder.Services.AddDbContext<ApplcationDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
