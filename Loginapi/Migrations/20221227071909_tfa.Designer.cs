@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Loginapi.Migrations
 {
     [DbContext(typeof(ApplcationDbContext))]
-    [Migration("20221011171144_CreateUserTokenTable")]
-    partial class CreateUserTokenTable
+    [Migration("20221227071909_tfa")]
+    partial class tfa
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
@@ -23,6 +23,23 @@ namespace Loginapi.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder, 1L, 1);
+
+            modelBuilder.Entity("Loginapi.Models.ResetToken", b =>
+                {
+                    b.Property<string>("Token")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Token");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.ToTable("ResetToken");
+                });
 
             modelBuilder.Entity("Loginapi.Models.User", b =>
                 {
@@ -46,6 +63,9 @@ namespace Loginapi.Migrations
 
                     b.Property<string>("Password")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TfaSecret")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");

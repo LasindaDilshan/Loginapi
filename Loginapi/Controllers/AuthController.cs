@@ -1,8 +1,12 @@
-﻿using Loginapi.Data;
+﻿using Google.Apis.Auth;
+using Google.Authenticator;
+using Loginapi.Data;
 using Loginapi.DTO;
 using Loginapi.Models;
 using Loginapi.Services;
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Runtime.InteropServices;
 
 namespace Loginapi.Controllers
 {
@@ -14,8 +18,7 @@ namespace Loginapi.Controllers
     {
         private IConfiguration _configuration;
         private ApplcationDbContext db;
-        
-
+        private readonly string appName = "LoginApi";
         public AuthController(ApplcationDbContext db , IConfiguration configuration) {
             this.db = db;
             this._configuration = configuration;
@@ -49,7 +52,7 @@ namespace Loginapi.Controllers
         [HttpPost("login")]
         public IActionResult Login(LoginDto dto)
         {
-            User user = db.users.Where(x => x.Email == dto.Email).FirstOrDefault();
+            User? user = db.users.Where(x => x.Email == dto.Email).FirstOrDefault();
 
             if(user == null )
             {
@@ -60,27 +63,46 @@ namespace Loginapi.Controllers
             {
                 return Unauthorized("Invalid Credintials");
             }
-
-            string accessToken = TokenService.CreateAccessToken(user.Id, _configuration.GetSection("JWT:Accesskey").Value);
-            string refreshToken = TokenService.CreateRefreshToken(user.Id, _configuration.GetSection("JWT:Refreshkey").Value);
-
-            CookieOptions cookieoptions = new ();
-            cookieoptions.HttpOnly = true;
-            Response.Cookies.Append("refresh_token", refreshToken, cookieoptions);
-
-            UserToken token = new()
+            if(user.TfaSecret is not null)
             {
-                UserId = user.Id,
-                Token = refreshToken,
-                ExpiredAt = DateTime.Now.AddDays(7)
-            };
+                return Ok(new
+                {
+                    id = user.Id
+                });
+            }
+            Random random = new Random();
+            string secret = new(Enumerable.Repeat("ABCDEFGHIJKLMNOPQRSUVWXYZ234567" , 32).Select( s => s[random.Next(s.Length)]).ToArray());
 
-            db.UserToken.Add(token);
-            db.SaveChanges();
-            return Ok(new
-            {
-                token = accessToken
-            });
+            string otpAuthUrl = $"otpauth://totp/{appName}:Secret?secret={secret}&issuer={appName}".Replace(" ","%20");
+
+            return Ok(
+                new
+                {
+                    id = user.Id,
+                    secret = secret,
+                    passsql = otpAuthUrl
+                });
+             
+            //string accessToken = TokenService.CreateAccessToken(user.Id, _configuration.GetSection("JWT:Accesskey").Value);
+            //string refreshToken = TokenService.CreateRefreshToken(user.Id, _configuration.GetSection("JWT:Refreshkey").Value);
+
+            //CookieOptions cookieoptions = new ();
+            //cookieoptions.HttpOnly = true;
+            //Response.Cookies.Append("refresh_token", refreshToken, cookieoptions);
+
+            //UserToken token = new()
+            //{
+            //    UserId = user.Id,
+            //    Token = refreshToken,
+            //    ExpiredAt = DateTime.Now.AddDays(7)
+            //};
+
+            //db.UserToken.Add(token);
+            //db.SaveChanges();
+            //return Ok(new
+            //{
+            //    token = accessToken
+            //});
         }
         [HttpGet("user")]
 
@@ -154,6 +176,108 @@ namespace Loginapi.Controllers
             db.SaveChanges();
             Response.Cookies.Delete("refresh_token");
             return Ok();
+        }
+
+        [HttpPost("two-factor")]
+        public IActionResult TwoFactor(TwoFactorDto dto)
+        {
+            User? user = db.users.Where( u => u.Id == dto.Id).FirstOrDefault();
+
+            if(user is null)
+            {
+                return Unauthorized("Invalid Credintials");
+            }
+
+            string secret = user.TfaSecret is not null ? user.TfaSecret : dto.Secret;
+
+            TwoFactorAuthenticator tfa = new();
+
+            if(!tfa.ValidateTwoFactorPIN(secret, dto.Code , true))
+            {
+                return Unauthorized("Invalid Credintials");
+
+            }
+
+            if(user.TfaSecret is null)
+            {
+                db.users.Where(u => u.Email == user.Email).FirstOrDefault()!.TfaSecret = dto.Secret;
+                db.SaveChanges();
+            }
+
+            string accessToken = TokenService.CreateAccessToken(dto.Id, _configuration.GetSection("JWT:Accesskey").Value);
+            string refreshToken = TokenService.CreateRefreshToken(dto.Id, _configuration.GetSection("JWT:Refreshkey").Value);
+
+            CookieOptions cookieoptions = new();
+            cookieoptions.HttpOnly = true;
+            Response.Cookies.Append("refresh_token", refreshToken, cookieoptions);
+
+            UserToken token = new()
+            {
+                UserId = dto.Id,
+                Token = refreshToken,
+                ExpiredAt = DateTime.Now.AddDays(7)
+            };
+
+            db.UserToken.Add(token);
+            db.SaveChanges();
+            return Ok(new
+            {
+                token = accessToken
+            });
+
+
+        }
+
+
+        [HttpPost("google-auth")]
+
+        public async Task<IActionResult> GoogleAuth( GoogleAuthDto dto)
+        {
+            var googleUser = await GoogleJsonWebSignature.ValidateAsync(dto.Token);
+
+            if( googleUser is null)
+            {
+                return Unauthorized(" Unauthorized! ");
+            }
+
+            User? user = db.users.Where( u => u.Email == googleUser.Email).FirstOrDefault();
+
+            if( user is null)
+            {
+
+                user = new()
+                {
+                    FirstName = googleUser.GivenName,
+                    LastName = googleUser.FamilyName,
+                    Email = googleUser.Email,
+                    Password = dto.Token
+                };
+                db.users.Add(user);
+                db.SaveChanges();
+            }
+            string accessToken = TokenService.CreateAccessToken(user.Id, _configuration.GetSection("JWT:Accesskey").Value);
+            string refreshToken = TokenService.CreateRefreshToken(user.Id, _configuration.GetSection("JWT:Refreshkey").Value);
+
+            CookieOptions cookieoptions = new();
+            cookieoptions.HttpOnly = true;
+            Response.Cookies.Append("refresh_token", refreshToken, cookieoptions);
+
+            UserToken token = new()
+            {
+                UserId = user.Id,
+                Token = refreshToken,
+                ExpiredAt = DateTime.Now.AddDays(7)
+            };
+
+            db.UserToken.Add(token);
+            db.SaveChanges();
+            return Ok(new
+            {
+                token = accessToken
+            });
+
+
+
         }
 
 

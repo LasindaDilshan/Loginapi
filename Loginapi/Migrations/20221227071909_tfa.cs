@@ -5,10 +5,22 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Loginapi.Migrations
 {
-    public partial class CreateUserTokenTable : Migration
+    public partial class tfa : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "ResetToken",
+                columns: table => new
+                {
+                    Token = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ResetToken", x => x.Token);
+                });
+
             migrationBuilder.CreateTable(
                 name: "users",
                 columns: table => new
@@ -18,7 +30,8 @@ namespace Loginapi.Migrations
                     FirstName = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    Password = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Password = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TfaSecret = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -42,6 +55,12 @@ namespace Loginapi.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_ResetToken_Token",
+                table: "ResetToken",
+                column: "Token",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_users_Email",
                 table: "users",
                 column: "Email",
@@ -50,6 +69,9 @@ namespace Loginapi.Migrations
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "ResetToken");
+
             migrationBuilder.DropTable(
                 name: "users");
 
